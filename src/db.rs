@@ -1,4 +1,7 @@
-use std::{fs::File, io::{BufReader, BufWriter}};
+use std::{
+    fs::{self, File},
+    io::{BufReader, BufWriter},
+};
 
 use anyhow::{Error, Result};
 
@@ -15,20 +18,13 @@ struct JSONFileDatabase {
 
 impl Database for JSONFileDatabase {
     fn read_db(&self) -> Result<DBState, Error> {
-        let file = File::open(&self.file_path)?;
-        let reader = BufReader::new(file);
-
-        // Read the JSON contents of the file as an instance of `User`.
-        let u = serde_json::from_reader(reader)?;
-
-        // Return the `User`.
-        Ok(u)
+        let db_string = fs::read_to_string(&self.file_path)?;
+        Ok(serde_json::from_str(&db_string)?)
     }
 
     fn write_db(&self, db_state: &DBState) -> Result<()> {
-        let file = File::open(&self.file_path)?;
-        let writer = BufWriter::new(file);
-        Ok(serde_json::to_writer_pretty(writer, db_state)?)
+        fs::write(&self.file_path, serde_json::to_vec_pretty(&db_state)?)?;
+        Ok(())
     }
 }
 
@@ -38,9 +34,36 @@ mod tests {
 
     mod database {
         use std::collections::HashMap;
-        use std::io::Write;
+        use std::io::{Read, Seek, Write};
 
         use super::*;
+
+        fn create_dbstate() -> DBState {
+            let story = Story {
+                name: "epic 1".to_owned(),
+                description: "epic 1".to_owned(),
+                status: Status::Open,
+            };
+
+            let epic = Epic {
+                name: "epic 1".to_owned(),
+                description: "epic 1".to_owned(),
+                status: Status::Open,
+                stories: vec![2],
+            };
+
+            let mut stories = HashMap::new();
+            stories.insert(2, story);
+
+            let mut epics = HashMap::new();
+            epics.insert(1, epic);
+
+            DBState {
+                last_item_id: 2,
+                epics,
+                stories,
+            }
+        }
 
         #[test]
         fn read_db_should_fail_with_invalid_path() {
@@ -105,36 +128,24 @@ mod tests {
                     .to_string(),
             };
 
-            let story = Story {
-                name: "epic 1".to_owned(),
-                description: "epic 1".to_owned(),
-                status: Status::Open,
-            };
-            let epic = Epic {
-                name: "epic 1".to_owned(),
-                description: "epic 1".to_owned(),
-                status: Status::Open,
-                stories: vec![2],
-            };
-
-            let mut stories = HashMap::new();
-            stories.insert(2, story);
-
-            let mut epics = HashMap::new();
-            epics.insert(1, epic);
-
-            let state = DBState {
-                last_item_id: 2,
-                epics,
-                stories,
-            };
+            let state = create_dbstate();
 
             let write_result = db.write_db(&state);
             let read_result = db.read_db().unwrap();
 
             assert_eq!(write_result.is_ok(), true);
-            // TODO: fix this error by deriving the appropriate traits for DBState
             assert_eq!(read_result, state);
+        }
+
+        #[test]
+        fn serialize_deserialize_string() {
+            let state = create_dbstate();
+
+            let written = serde_json::to_string_pretty(&state).expect("Could not write to string");
+            println!("{}", written);
+            let read: DBState = serde_json::from_str(&written).expect("Could not read from string");
+
+            assert_eq!(read, state);
         }
     }
 }
