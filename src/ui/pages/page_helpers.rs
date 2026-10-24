@@ -1,11 +1,13 @@
 use unicode_segmentation::UnicodeSegmentation;
 
 pub fn get_column_string(text: &str, width: usize) -> String {
-    assert!(width >= 3);
-
     let length = text.graphemes(true).count();
     if length > width {
-        text.graphemes(true).take(width-3).collect::<String>() + "..."
+        text.graphemes(true)
+            .take(width - 3.min(width))
+            .chain("...".graphemes(true))
+            .take(width)
+            .collect()
     } else {
         format!("{text:width$}")
     }

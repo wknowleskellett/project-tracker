@@ -21,21 +21,48 @@ impl Prompts {
 }
 
 fn create_epic_prompt() -> Epic {
-    todo!();
+    println!("----------------------------");
+    println!("Epic Name:");
+    let name = get_user_input();
+    println!("Epic Description:");
+    let description = get_user_input();
+
+    Epic::new(name, description)
 }
 
 fn create_story_prompt() -> Story {
-    todo!();
+    println!("----------------------------");
+    println!("Story Name:");
+    let name = get_user_input();
+    println!("Story Description:");
+    let description = get_user_input();
+
+    Story::new(name, description)
 }
 
 fn delete_epic_prompt() -> bool {
-    todo!();
+    println!("----------------------------");
+    println!("Are you sure you want to delete this epic? All stories in this epic will also be deleted [Y/n]:");
+    get_user_input().to_lowercase() == "y"
 }
 
 fn delete_story_prompt() -> bool {
-    todo!();
+    println!("----------------------------");
+    print!("Are you sure you want to delete this story? [Y/n]: ");
+    get_user_input().to_lowercase() == "y"
 }
 
 fn update_status_prompt() -> Option<Status> {
-    todo!();
+    use Status::*;
+    println!("----------------------------");
+    println!("New Status (1 - OPEN, 2 - IN-PROGRESS, 3 - RESOLVED, 4 - CLOSED):");
+    
+    let input: u8 = get_user_input().parse().ok()?;
+    match input {
+        1 => Some(Open),
+        2 => Some(InProgress),
+        3 => Some(Resolved),
+        4 => Some(Closed),
+        _ => None,
+    }
 }

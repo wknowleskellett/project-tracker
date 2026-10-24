@@ -119,6 +119,7 @@ impl Database for JSONFileDatabase {
     }
 }
 
+#[cfg(test)]
 pub mod test_utils {
     use std::{cell::RefCell, collections::HashMap};
 
