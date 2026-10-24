@@ -38,7 +38,7 @@ impl JiraDatabase {
         db_state
             .epics
             .get_mut(&epic_id)
-            .ok_or(anyhow!("No epic with id {}", epic_id))?
+            .ok_or_else(|| anyhow!("No epic with id {}", epic_id))?
             .stories
             .push(id);
         db_state.stories.insert(id, story);
@@ -49,14 +49,14 @@ impl JiraDatabase {
 
     pub fn delete_epic(&self, epic_id: u32) -> Result<()> {
         let mut db_state = self.database.read_db()?;
-        let epic = db_state.epics.remove(&epic_id).ok_or(anyhow!(
-            "Epic with id {epic_id} cannot be removed because it does not exist."
-        ))?;
+        let epic = db_state.epics.remove(&epic_id).ok_or_else(|| {
+            anyhow!("Epic with id {epic_id} cannot be removed because it does not exist.")
+        })?;
 
         for story_id in &epic.stories {
-            db_state.stories.remove(&story_id).ok_or(anyhow!(
-                "Story with id {story_id} cannot be removed because it does not exist."
-            ))?;
+            db_state.stories.remove(&story_id).ok_or_else(|| {
+                anyhow!("Story with id {story_id} cannot be removed because it does not exist.")
+            })?;
         }
 
         self.database.write_db(&db_state)
@@ -67,23 +67,23 @@ impl JiraDatabase {
 
         // Remove story from epic
         let epic_stories = &mut db_state.epics.get_mut(&epic_id)
-            .ok_or(anyhow!("Story with id {story_id} cannot be removed from epic with id {epic_id} because the epic does not exist."))?
+            .ok_or_else(|| anyhow!("Story with id {story_id} cannot be removed from epic with id {epic_id} because the epic does not exist."))?
             .stories;
         let index = epic_stories.iter().position(|x| *x == story_id)
-            .ok_or(anyhow!("Story with id {story_id} cannot be removed from epic with id {epic_id} because the story does not exist."))
+            .ok_or_else(|| anyhow!("Story with id {story_id} cannot be removed from epic with id {epic_id} because the story does not exist."))
             ?;
         epic_stories.remove(index);
 
         // Remove story from overall stories
-        db_state.stories.remove(&story_id).ok_or(anyhow!(
-            "Story with id {story_id} cannot be removed because it does not exist."
-        ))?;
+        db_state.stories.remove(&story_id).ok_or_else(|| {
+            anyhow!("Story with id {story_id} cannot be removed because it does not exist.")
+        })?;
         self.database.write_db(&db_state)
     }
 
     pub fn update_epic_status(&self, epic_id: u32, status: Status) -> Result<()> {
         let mut db_state = self.database.read_db()?;
-        db_state.epics.get_mut(&epic_id).ok_or(anyhow!(
+        db_state.epics.get_mut(&epic_id).ok_or_else(|| anyhow!(
             "Status for epic with id {epic_id} could not be updated because epic does not exist."
         ))?.status = status;
         self.database.write_db(&db_state)
@@ -91,7 +91,7 @@ impl JiraDatabase {
 
     pub fn update_story_status(&self, story_id: u32, status: Status) -> Result<()> {
         let mut db_state = self.database.read_db()?;
-        db_state.stories.get_mut(&story_id).ok_or(anyhow!(
+        db_state.stories.get_mut(&story_id).ok_or_else(|| anyhow!(
             "Status for story with id {story_id} could not be updated because story does not exist."
         ))?.status = status;
         self.database.write_db(&db_state)
@@ -142,14 +142,12 @@ pub mod test_utils {
 
     impl Database for MockDB {
         fn read_db(&self) -> Result<DBState> {
-            // TODO: fix this error by deriving the appropriate traits for Story
             let state = self.last_written_state.borrow().clone();
             Ok(state)
         }
 
         fn write_db(&self, db_state: &DBState) -> Result<()> {
             let latest_state = &self.last_written_state;
-            // TODO: fix this error by deriving the appropriate traits for DBState
             *latest_state.borrow_mut() = db_state.clone();
             Ok(())
         }
@@ -168,7 +166,6 @@ mod tests {
         };
         let epic = Epic::new("".to_owned(), "".to_owned());
 
-        // TODO: fix this error by deriving the appropriate traits for Epic
         let result = db.create_epic(epic.clone());
 
         assert_eq!(result.is_ok(), true);
@@ -209,7 +206,6 @@ mod tests {
 
         let epic_id = result.unwrap();
 
-        // TODO: fix this error by deriving the appropriate traits for Story
         let result = db.create_story(story.clone(), epic_id);
         assert_eq!(result.is_ok(), true);
 
@@ -429,7 +425,7 @@ mod tests {
 
     mod database {
         use std::collections::HashMap;
-        use std::io::{Write};
+        use std::io::Write;
 
         use super::*;
 
