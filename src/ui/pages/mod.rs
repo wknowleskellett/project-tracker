@@ -2,12 +2,13 @@ use std::rc::Rc;
 
 use anyhow::Result;
 use anyhow::anyhow;
+use itertools::Itertools;
 
 use crate::db::JiraDatabase;
 use crate::models::Action;
 
 mod page_helpers;
-use page_helpers::*;
+use page_helpers::get_column_string;
 
 pub trait Page {
     fn draw_page(&self) -> Result<()>;
@@ -17,12 +18,21 @@ pub trait Page {
 pub struct HomePage {
     pub db: Rc<JiraDatabase>,
 }
+
 impl Page for HomePage {
     fn draw_page(&self) -> Result<()> {
         println!("----------------------------- EPICS -----------------------------");
         println!("     id     |               name               |      status      ");
 
-        // TODO: print out epics using get_column_string(). also make sure the epics are sorted by id
+        let parsed = self.db.read_db()?;
+
+        for (id, epic) in parsed.epics.iter().sorted_by_key(|(id, _)| *id) {
+            let id = get_column_string(&id.to_string(), 11);
+            let name = get_column_string(&epic.name, 32);
+            let status = get_column_string(&epic.status.to_string(), 17);
+
+            println!("{id} | {name} | {status}");
+        }
 
         println!();
         println!();
@@ -32,8 +42,24 @@ impl Page for HomePage {
         Ok(())
     }
 
-    fn handle_input(&self, input: &str) -> Result<Option<Action>> {
-        todo!() // match against the user input and return the corresponding action. If the user input was invalid return None.
+    fn handle_input(&self, input: &str) -> Result<Option<Action>, anyhow::Error> {
+        use Action::*;
+
+        match input {
+            "q" => Ok(Some(Exit)),
+            "c" => Ok(Some(CreateEpic)),
+            other => match other.parse::<u32>() {
+                Err(_) => Ok(None),
+                Ok(epic_id) => {
+                    let parsed = self.db.read_db()?;
+                    if parsed.epics.contains_key(&epic_id) {
+                        Ok(Some(NavigateToEpicDetail { epic_id }))
+                    } else {
+                        Ok(None)
+                    }
+                }
+            },
+        }
     }
 }
 
@@ -48,12 +74,17 @@ impl Page for EpicDetail {
         let epic = db_state
             .epics
             .get(&self.epic_id)
-            .ok_or_else(|| anyhow!("could not find epic!"))?;
+            .ok_or_else(|| anyhow!("Epic with id {} does not exist.", self.epic_id))?;
 
         println!("------------------------------ EPIC ------------------------------");
         println!("  id  |     name     |         description         |    status    ");
 
-        // TODO: print out epic details using get_column_string()
+        let id = get_column_string(&self.epic_id.to_string(), 5);
+        let name = get_column_string(&epic.name, 12);
+        let description = get_column_string(&epic.description, 27);
+        let status = get_column_string(&epic.status.to_string(), 13);
+
+        println!("{id} | {name} | {description} | {status}");
 
         println!();
 
@@ -62,7 +93,20 @@ impl Page for EpicDetail {
 
         let stories = &db_state.stories;
 
-        // TODO: print out stories using get_column_string(). also make sure the stories are sorted by id
+        for story_id in epic.stories.iter().sorted() {
+            let story = stories.get(story_id).ok_or_else(|| {
+                anyhow!(
+                    "Epic with id {} contains a story with id {story_id} that does not exist.",
+                    self.epic_id
+                )
+            })?;
+
+            let id = get_column_string(&story_id.to_string(), 11);
+            let name = get_column_string(&story.name, 32);
+            let status = get_column_string(&story.status.to_string(), 17);
+
+            println!("{id} | {name} | {status}");
+        }
 
         println!();
         println!();
@@ -75,7 +119,34 @@ impl Page for EpicDetail {
     }
 
     fn handle_input(&self, input: &str) -> Result<Option<Action>> {
-        todo!() // match against the user input and return the corresponding action. If the user input was invalid return None.
+        use Action::*;
+
+        let epic_id = self.epic_id;
+
+        match input {
+            "p" => Ok(Some(NavigateToPreviousPage)),
+            "u" => Ok(Some(UpdateEpicStatus { epic_id })),
+            "d" => Ok(Some(DeleteEpic { epic_id })),
+            "c" => Ok(Some(CreateStory { epic_id })),
+            other => match other.parse::<u32>() {
+                Err(_) => Ok(None),
+                Ok(story_id) => {
+                    let parsed = self.db.read_db()?;
+                    let epic = parsed.epics.get(&epic_id).ok_or_else(|| {
+                        anyhow!(
+                            "Epic of current page with id {} does not exist.",
+                            self.epic_id
+                        )
+                    })?;
+
+                    if epic.stories.contains(&story_id) && parsed.stories.contains_key(&story_id) {
+                        Ok(Some(NavigateToStoryDetail { epic_id, story_id }))
+                    } else {
+                        Ok(None)
+                    }
+                }
+            },
+        }
     }
 }
 
@@ -96,7 +167,12 @@ impl Page for StoryDetail {
         println!("------------------------------ STORY ------------------------------");
         println!("  id  |     name     |         description         |    status    ");
 
-        // TODO: print out story details using get_column_string()
+        let id = get_column_string(&self.story_id.to_string(), 5);
+        let name = get_column_string(&story.name, 12);
+        let description = get_column_string(&story.description, 27);
+        let status = get_column_string(&story.status.to_string(), 13);
+
+        println!("{id} | {name} | {description} | {status}");
 
         println!();
         println!();
@@ -107,7 +183,17 @@ impl Page for StoryDetail {
     }
 
     fn handle_input(&self, input: &str) -> Result<Option<Action>> {
-        todo!() // match against the user input and return the corresponding action. If the user input was invalid return None.
+        use Action::*;
+
+        let epic_id = self.epic_id;
+        let story_id = self.story_id;
+
+        match input {
+            "p" => Ok(Some(NavigateToPreviousPage)),
+            "u" => Ok(Some(Action::UpdateStoryStatus { story_id })),
+            "d" => Ok(Some(DeleteStory { epic_id, story_id })),
+            _ => Ok(None)
+        }
     }
 }
 
