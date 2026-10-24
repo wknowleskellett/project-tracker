@@ -1,7 +1,14 @@
-use ellipse::Ellipse;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub fn get_column_string(text: &str, width: usize) -> String {
-    text.truncate_ellipse(width-3).to_string()
+    assert!(width >= 3);
+
+    let length = text.graphemes(true).count();
+    if length > width {
+        text.graphemes(true).take(width-3).collect::<String>() + "..."
+    } else {
+        format!("{text:width$}")
+    }
 }
 
 #[cfg(test)]

@@ -48,17 +48,14 @@ impl Page for HomePage {
         match input {
             "q" => Ok(Some(Exit)),
             "c" => Ok(Some(CreateEpic)),
-            other => match other.parse::<u32>() {
-                Err(_) => Ok(None),
-                Ok(epic_id) => {
-                    let parsed = self.db.read_db()?;
-                    if parsed.epics.contains_key(&epic_id) {
-                        Ok(Some(NavigateToEpicDetail { epic_id }))
-                    } else {
-                        Ok(None)
+            other => {
+                if let Ok(epic_id) = other.parse::<u32>() {
+                    if self.db.read_db()?.epics.contains_key(&epic_id) {
+                        return Ok(Some(NavigateToEpicDetail { epic_id }));
                     }
                 }
-            },
+                Ok(None)
+            }
         }
     }
 }
@@ -128,9 +125,8 @@ impl Page for EpicDetail {
             "u" => Ok(Some(UpdateEpicStatus { epic_id })),
             "d" => Ok(Some(DeleteEpic { epic_id })),
             "c" => Ok(Some(CreateStory { epic_id })),
-            other => match other.parse::<u32>() {
-                Err(_) => Ok(None),
-                Ok(story_id) => {
+            other => {
+                if let Ok(story_id) = other.parse::<u32>() {
                     let parsed = self.db.read_db()?;
                     let epic = parsed.epics.get(&epic_id).ok_or_else(|| {
                         anyhow!(
@@ -140,11 +136,10 @@ impl Page for EpicDetail {
                     })?;
 
                     if epic.stories.contains(&story_id) && parsed.stories.contains_key(&story_id) {
-                        Ok(Some(NavigateToStoryDetail { epic_id, story_id }))
-                    } else {
-                        Ok(None)
+                        return Ok(Some(NavigateToStoryDetail { epic_id, story_id }));
                     }
                 }
+                Ok(None)
             },
         }
     }
@@ -190,9 +185,9 @@ impl Page for StoryDetail {
 
         match input {
             "p" => Ok(Some(NavigateToPreviousPage)),
-            "u" => Ok(Some(Action::UpdateStoryStatus { story_id })),
+            "u" => Ok(Some(UpdateStoryStatus { story_id })),
             "d" => Ok(Some(DeleteStory { epic_id, story_id })),
-            _ => Ok(None)
+            _ => Ok(None),
         }
     }
 }
