@@ -23,7 +23,7 @@ impl Prompts {
     }
 }
 
-fn create_epic_prompt() -> Epic {
+pub fn create_epic_prompt() -> Epic {
     println!("----------------------------");
     println!("Epic Name:");
     let name = get_user_input();
@@ -33,7 +33,7 @@ fn create_epic_prompt() -> Epic {
     Epic::new(name, description)
 }
 
-fn create_story_prompt() -> Story {
+pub fn create_story_prompt() -> Story {
     println!("----------------------------");
     println!("Story Name:");
     let name = get_user_input();
@@ -43,7 +43,7 @@ fn create_story_prompt() -> Story {
     Story::new(name, description)
 }
 
-fn delete_epic_prompt() -> bool {
+pub fn delete_epic_prompt() -> bool {
     println!("----------------------------");
     println!(
         "Are you sure you want to delete this epic? All stories in this epic will also be deleted [Y/n]:"
@@ -51,23 +51,29 @@ fn delete_epic_prompt() -> bool {
     get_user_input().to_lowercase() == "y"
 }
 
-fn delete_story_prompt() -> bool {
+pub fn delete_story_prompt() -> bool {
     println!("----------------------------");
     print!("Are you sure you want to delete this story? [Y/n]: ");
     get_user_input().to_lowercase() == "y"
 }
 
-fn update_status_prompt() -> Option<Status> {
+pub fn update_status_prompt() -> Option<Status> {
     use Status::*;
     println!("----------------------------");
     println!("New Status (1 - OPEN, 2 - IN-PROGRESS, 3 - RESOLVED, 4 - CLOSED):");
 
-    let input: u8 = get_user_input().parse().ok()?;
-    match input {
-        1 => Some(Open),
-        2 => Some(InProgress),
-        3 => Some(Resolved),
-        4 => Some(Closed),
-        _ => None,
+    match get_user_input().parse::<u8>() {
+        Ok(1) => Some(Open),
+        Ok(2) => Some(InProgress),
+        Ok(3) => Some(Resolved),
+        Ok(4) => Some(Closed),
+        Ok(n) => {
+            println!("Invalid option selected: {n}");
+            None
+        },
+        Err(e) => {
+            println!("{e}");
+            None
+        }
     }
 }

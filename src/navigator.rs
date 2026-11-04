@@ -4,7 +4,10 @@ use std::rc::Rc;
 use crate::{
     db::JiraDatabase,
     models::Action,
-    ui::{EpicDetail, HomePage, Page, Prompts, StoryDetail},
+    ui::{
+        EpicDetail, HomePage, Page, Prompts, StoryDetail, create_epic_prompt, create_story_prompt,
+        update_status_prompt,
+    },
 };
 
 pub struct Navigator {
@@ -15,44 +18,111 @@ pub struct Navigator {
 
 impl Navigator {
     pub fn new(db: Rc<JiraDatabase>) -> Self {
-        todo!()
+        Self {
+            pages: vec![Box::new(HomePage { db: db.clone() })],
+            prompts: Prompts::new(),
+            db,
+        }
     }
 
     pub fn get_current_page(&self) -> Option<&Box<dyn Page>> {
-        todo!() // this should always return the last element in the pages vector
+        self.pages.last()
     }
 
     pub fn handle_action(&mut self, action: Action) -> Result<()> {
         match action {
             Action::NavigateToEpicDetail { epic_id } => {
-                todo!() // create a new EpicDetail instance and add it to the pages vector
+                // create a new EpicDetail instance and add it to the pages vector
+                self.pages.push(Box::new(EpicDetail {
+                    epic_id,
+                    db: self.db.clone(),
+                }))
             }
             Action::NavigateToStoryDetail { epic_id, story_id } => {
-                todo!() // create a new StoryDetail instance and add it to the pages vector
+                // create a new StoryDetail instance and add it to the pages vector
+                self.pages.push(Box::new(StoryDetail {
+                    epic_id,
+                    story_id,
+                    db: self.db.clone(),
+                }))
             }
             Action::NavigateToPreviousPage => {
-                todo!() // remove the last page from the pages vector
+                // remove the last page from the pages vector
+                self.pages.pop();
             }
             Action::CreateEpic => {
-                todo!() // prompt the user to create a new epic and persist it in the database
+                // prompt the user to create a new epic and persist it in the database
+                self.db
+                    .create_epic((self.prompts.create_epic)())
+                    .with_context(|| "Could not save epic from data entered in the database.")?;
             }
             Action::UpdateEpicStatus { epic_id } => {
-                todo!() // prompt the user to update status and persist it in the database
+                // prompt the user to update status and persist it in the database
+                match (self.prompts.update_status)() {
+                    Some(status) => self
+                        .db
+                        .update_epic_status(epic_id, status)
+                        .with_context(|| "Could not update status with user input")?,
+                    None => (),
+                }
             }
             Action::DeleteEpic { epic_id } => {
-                todo!() // prompt the user to delete the epic and persist it in the database
+                // prompt the user to delete the epic and persist it in the database
+                if !(self.prompts.delete_epic)() {
+                    return Ok(());
+                }
+
+                self.db
+                    .delete_epic(epic_id)
+                    .with_context(|| "Could not delete epic selected by user")?;
+                // self.pages
+                //     .pop_if(|page| match page.as_any().downcast_ref::<EpicDetail>() {
+                //         Some(epic_detail_page) => epic_detail_page.epic_id == epic_id,
+                //         None => false,
+                //     });
+                //     .ok_or_else(|| {
+                //         anyhow!("Epic that was deleted was not the current page in navigation.")
+                //     })?;
             }
             Action::CreateStory { epic_id } => {
-                todo!() // prompt the user to create a new story and persist it in the database
+                // prompt the user to create a new story and persist it in the database
+                self.db
+                    .create_story((self.prompts.create_story)(), epic_id)
+                    .with_context(|| "Could not create story requested by user")?;
             }
             Action::UpdateStoryStatus { story_id } => {
-                todo!() // prompt the user to update status and persist it in the database
+                // prompt the user to update status and persist it in the database
+                self.db.update_story_status(
+                    story_id,
+                    (self.prompts.update_status)().ok_or_else(|| {
+                        anyhow!("Could not get updated story status selection from user input")
+                    })?,
+                )?
             }
             Action::DeleteStory { epic_id, story_id } => {
-                todo!() // prompt the user to delete the story and persist it in the database
+                // prompt the user to delete the story and persist it in the database
+                if !(self.prompts.delete_story)() {
+                    return Ok(());
+                }
+
+                self.db
+                    .delete_story(epic_id, story_id)
+                    .with_context(|| "Could not delete story selected by user")?;
+                // self.pages
+                //     .pop_if(|page| match page.as_any().downcast_ref::<StoryDetail>() {
+                //         Some(story_detail_page) => {
+                //             story_detail_page.epic_id == epic_id
+                //                 && story_detail_page.story_id == story_id
+                //         }
+                //         None => false,
+                //     })
+                //     .ok_or_else(|| {
+                //         anyhow!("Epic that was deleted was not the current page in navigation.")
+                //     })?;
             }
             Action::Exit => {
-                todo!() // remove all pages from the pages vector
+                // remove all pages from the pages vector
+                self.pages.clear();
             }
         }
 
@@ -61,10 +131,12 @@ impl Navigator {
 
     // Private functions used for testing
 
+    #[cfg(test)]
     fn get_page_count(&self) -> usize {
         self.pages.len()
     }
 
+    #[cfg(test)]
     fn set_prompts(&mut self, prompts: Prompts) {
         self.prompts = prompts;
     }
