@@ -19,7 +19,7 @@ pub struct Navigator {
 impl Navigator {
     pub fn new(db: Rc<JiraDatabase>) -> Self {
         Self {
-            pages: vec![Box::new(HomePage { db: db.clone() })],
+            pages: vec![Box::new(HomePage { db: Rc::clone(&db) })],
             prompts: Prompts::new(),
             db,
         }
@@ -35,7 +35,7 @@ impl Navigator {
                 // create a new EpicDetail instance and add it to the pages vector
                 self.pages.push(Box::new(EpicDetail {
                     epic_id,
-                    db: self.db.clone(),
+                    db: Rc::clone(&self.db),
                 }))
             }
             Action::NavigateToStoryDetail { epic_id, story_id } => {
@@ -43,7 +43,7 @@ impl Navigator {
                 self.pages.push(Box::new(StoryDetail {
                     epic_id,
                     story_id,
-                    db: self.db.clone(),
+                    db: Rc::clone(&self.db),
                 }))
             }
             Action::NavigateToPreviousPage => {
@@ -54,7 +54,9 @@ impl Navigator {
                 // prompt the user to create a new epic and persist it in the database
                 self.db
                     .create_epic((self.prompts.create_epic)())
-                    .with_context(|| "Could not save epic from data entered in the database.")?;
+                    .with_context(|| {
+                        anyhow!("Could not save epic from data entered in the database.")
+                    })?;
             }
             Action::UpdateEpicStatus { epic_id } => {
                 // prompt the user to update status and persist it in the database
@@ -62,7 +64,7 @@ impl Navigator {
                     Some(status) => self
                         .db
                         .update_epic_status(epic_id, status)
-                        .with_context(|| "Could not update status with user input")?,
+                        .with_context(|| anyhow!("Could not update status with user input"))?,
                     None => (),
                 }
             }
@@ -74,30 +76,34 @@ impl Navigator {
 
                 self.db
                     .delete_epic(epic_id)
-                    .with_context(|| "Could not delete epic selected by user")?;
-                // self.pages
-                //     .pop_if(|page| match page.as_any().downcast_ref::<EpicDetail>() {
-                //         Some(epic_detail_page) => epic_detail_page.epic_id == epic_id,
-                //         None => false,
-                //     });
-                //     .ok_or_else(|| {
-                //         anyhow!("Epic that was deleted was not the current page in navigation.")
-                //     })?;
+                    .with_context(|| anyhow!("Could not delete epic selected by user"))?;
+                self.pages
+                    .pop_if(|page| match page.as_any().downcast_ref::<EpicDetail>() {
+                        Some(epic_detail_page) => epic_detail_page.epic_id == epic_id,
+                        None => false,
+                    })
+                    .ok_or_else(|| {
+                        anyhow!("Epic that was deleted was not the current page in navigation.")
+                    })?;
             }
             Action::CreateStory { epic_id } => {
                 // prompt the user to create a new story and persist it in the database
                 self.db
                     .create_story((self.prompts.create_story)(), epic_id)
-                    .with_context(|| "Could not create story requested by user")?;
+                    .with_context(|| anyhow!("Could not create story requested by user"))?;
             }
             Action::UpdateStoryStatus { story_id } => {
                 // prompt the user to update status and persist it in the database
-                self.db.update_story_status(
-                    story_id,
-                    (self.prompts.update_status)().ok_or_else(|| {
-                        anyhow!("Could not get updated story status selection from user input")
-                    })?,
-                )?
+                self.db
+                    .update_story_status(
+                        story_id,
+                        (self.prompts.update_status)().ok_or_else(|| {
+                            anyhow!("Could not get updated story status selection from user input")
+                        })?,
+                    )
+                    .with_context(|| {
+                        anyhow!("Could not prompt status update for story with id {story_id}.")
+                    })?
             }
             Action::DeleteStory { epic_id, story_id } => {
                 // prompt the user to delete the story and persist it in the database
@@ -108,17 +114,17 @@ impl Navigator {
                 self.db
                     .delete_story(epic_id, story_id)
                     .with_context(|| "Could not delete story selected by user")?;
-                // self.pages
-                //     .pop_if(|page| match page.as_any().downcast_ref::<StoryDetail>() {
-                //         Some(story_detail_page) => {
-                //             story_detail_page.epic_id == epic_id
-                //                 && story_detail_page.story_id == story_id
-                //         }
-                //         None => false,
-                //     })
-                //     .ok_or_else(|| {
-                //         anyhow!("Epic that was deleted was not the current page in navigation.")
-                //     })?;
+                self.pages
+                    .pop_if(|page| match page.as_any().downcast_ref::<StoryDetail>() {
+                        Some(story_detail_page) => {
+                            story_detail_page.epic_id == epic_id
+                                && story_detail_page.story_id == story_id
+                        }
+                        None => false,
+                    })
+                    .ok_or_else(|| {
+                        anyhow!("Epic that was deleted was not the current page in navigation.")
+                    })?;
             }
             Action::Exit => {
                 // remove all pages from the pages vector
@@ -298,6 +304,8 @@ mod tests {
 
         nav.set_prompts(prompts);
 
+        nav.handle_action(Action::NavigateToEpicDetail { epic_id })
+            .unwrap();
         nav.handle_action(Action::DeleteEpic { epic_id }).unwrap();
 
         let db_state = db.read_db().unwrap();
@@ -378,6 +386,10 @@ mod tests {
 
         nav.set_prompts(prompts);
 
+        nav.handle_action(Action::NavigateToEpicDetail { epic_id })
+            .unwrap();
+        nav.handle_action(Action::NavigateToStoryDetail { epic_id, story_id })
+            .unwrap();
         nav.handle_action(Action::DeleteStory { epic_id, story_id })
             .unwrap();
 
