@@ -102,7 +102,7 @@ impl Navigator {
                         })?,
                     )
                     .with_context(|| {
-                        anyhow!("Could not prompt status update for story with id {story_id}.")
+                        anyhow!("Failed to prompt status update for story with id {story_id}.")
                     })?
             }
             Action::DeleteStory { epic_id, story_id } => {
